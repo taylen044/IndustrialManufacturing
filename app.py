@@ -64,17 +64,6 @@ st.sidebar.title('Explore & filter')
 st.sidebar.caption('Every change updates the table and financial charts.')
 sectors = sorted(data['Sector'].dropna().unique().tolist())
 selected_sectors = st.sidebar.multiselect('Sectors to include',sectors,default=sectors)
-st.sidebar.markdown('<div class="sidebar-section-heading">Financial warning signs</div>', unsafe_allow_html=True)
-accrual_cut = st.sidebar.slider('Accrual percentile flag',50,100,80,5,help='High accruals at or above this percentile are flagged.')
-z_valid = data['Altman Z'].dropna()
-if z_valid.empty:
-    z_lo,z_hi,z_default = 0.,5.,1.
-else:
-    z_lo=float(np.floor(z_valid.min()*10)/10);z_hi=float(np.ceil(z_valid.max()*10)/10)
-    if z_hi<=z_lo:z_hi=z_lo+1.
-    z_default=float(np.clip(z_valid.quantile(.25),z_lo,z_hi))
-z_cut=st.sidebar.slider('Altman Z cutoff',min_value=z_lo,max_value=z_hi,value=z_default,step=.01,help='A relative screening cutoff, not a validated bankruptcy threshold.')
-red_flags_required=st.sidebar.slider('Red flags required',0,3,0,1)
 st.sidebar.markdown('<div class="sidebar-section-heading">Build your own ranking</div>', unsafe_allow_html=True)
 st.sidebar.caption('Adjust the importance of each category. Weights are normalized automatically.')
 w_value=st.sidebar.slider('Value weight',0,100,25,5)
@@ -95,7 +84,7 @@ chart_metric=st.sidebar.selectbox('Ranking chart metric',['Custom Score','B/M','
 chart_style=st.sidebar.radio('Ranking chart style',['Horizontal bars','Vertical bars'],horizontal=False)
 scatter_x=st.sidebar.selectbox('Scatter X axis',RATIOS+['Custom Score'],index=2)
 scatter_y=st.sidebar.selectbox('Scatter Y axis',RATIOS+['Custom Score'],index=3)
-color_choice=st.sidebar.selectbox('Scatter colour by',['Sector','Custom Score','Red Flags','Coverage %'])
+color_choice=st.sidebar.selectbox('Scatter colour by',['Sector','Custom Score','Coverage %'])
 show_labels=st.sidebar.checkbox('Show ticker labels on scatter',value=False)
 st.sidebar.caption('Source: universe.csv · Saved financial snapshot, not live market data')
 
@@ -107,12 +96,6 @@ weight_available=(valid*weights).sum(axis=1)
 data['Custom Score']=np.divide(weighted.sum(axis=1),weight_available,out=np.full(len(data),np.nan),where=weight_available>0)
 data['Custom Rank']=data['Custom Score'].rank(ascending=False,method='min').astype('Int64')
 data['Score Coverage %']=(valid* (weights>0)).sum(axis=1)/max((weights>0).sum(),1)*100
-accrual_pct=data['Accruals'].rank(pct=True)*100
-data['High Accrual Flag']=(accrual_pct>=accrual_cut)&data['Accruals'].notna()
-data['Low Altman Z Flag']=(data['Altman Z']<z_cut)&data['Altman Z'].notna()
-data['Negative GPA Flag']=(data['GPA']<0)&data['GPA'].notna()
-data['Red Flags']=data[['High Accrual Flag','Low Altman Z Flag','Negative GPA Flag']].sum(axis=1).astype(int)
-
 st.markdown('<div class="eyebrow">FINANCIAL DISCOVERY · INDUSTRIAL MANUFACTURING</div>',unsafe_allow_html=True)
 st.title('Industrial Manufacturing')
 st.markdown('''<div class="intro">Explore industrial manufacturing stocks through an interactive financial lens. Compare company valuations, profitability, and accruals, then build your own ranking by deciding which factors matter most. <strong>The results change as you experiment</strong>—use the controls on the left to test ideas, discover unusual companies and investigate what drives their scores.</div>''',unsafe_allow_html=True)
@@ -121,15 +104,15 @@ st.caption('Educational stock screening based on the historical financial figure
 if not selected_sectors:
     st.info('Select at least one sector to display companies.');st.stop()
 scope=data[data['Sector'].isin(selected_sectors)].copy()
-scope=scope[(scope['Coverage %']>=min_coverage)&(scope['Custom Score'].isna() | (scope['Custom Score']>=min_score))&(scope['Red Flags']>=red_flags_required)].copy()
+scope=scope[(scope['Coverage %']>=min_coverage)&(scope['Custom Score'].isna() | (scope['Custom Score']>=min_score))].copy()
 if scope.empty:
-    st.warning('No companies match the current filters. Try a lower minimum score, fewer required flags or more sectors.');st.stop()
+    st.warning('No companies match the current filters. Try a lower minimum score or more sectors.');st.stop()
 
 m1,m2,m3,m4=st.columns(4)
 m1.metric('Companies on screen',len(scope))
 m2.metric('Companies in CSV',len(data))
 m3.metric('Median custom score',f'{scope["Custom Score"].median():.1f}' if scope['Custom Score'].notna().any() else 'N/A')
-m4.metric('Companies with red flags',int((scope['Red Flags']>0).sum()))
+m4.metric('Average ratio coverage',f'{scope["Coverage %"].mean():.0f}%')
 
 st.divider()
 st.header('All company stocks')
@@ -139,7 +122,7 @@ if search.strip():
     scope=scope[scope['Ticker'].str.contains(search.strip(),case=False,regex=False,na=False)|scope['Company'].astype(str).str.contains(search.strip(),case=False,regex=False,na=False)].copy()
 if scope.empty:
     st.info('No matching tickers or companies.');st.stop()
-cols=['Ticker','Company','Sector','fiscal_end','STA','SNOA','B/M','GPA','Altman Z','Accruals','Value Score','Quality Score','Risk Score','Overall Score','Custom Score','Custom Rank','Rank','Red Flags','Coverage %','Score Coverage %']
+cols=['Ticker','Company','Sector','fiscal_end','STA','SNOA','B/M','GPA','Altman Z','Accruals','Value Score','Quality Score','Risk Score','Overall Score','Custom Score','Custom Rank','Rank','Coverage %','Score Coverage %']
 cols=[c for c in cols if c in scope.columns]
 table=scope[cols].sort_values('Custom Score',ascending=False,na_position='last').copy()
 table['fiscal_end']=table['fiscal_end'].dt.strftime('%Y-%m-%d')
@@ -165,7 +148,7 @@ else:st.info('No valid data for the selected metric.')
 st.subheader(f'Explore relationships · {scatter_x} vs {scatter_y}')
 plot=scope.dropna(subset=[scatter_x,scatter_y]).copy()
 if not plot.empty:
-    fig=px.scatter(plot,x=scatter_x,y=scatter_y,color=color_choice,hover_name='Ticker',hover_data=['Company','Sector','Custom Score','Red Flags'],text='Ticker' if show_labels else None,opacity=.8,size_max=18)
+    fig=px.scatter(plot,x=scatter_x,y=scatter_y,color=color_choice,hover_name='Ticker',hover_data=['Company','Sector','Custom Score'],text='Ticker' if show_labels else None,opacity=.8,size_max=18)
     fig.update_traces(marker=dict(size=12),textposition='top center')
     fig.update_layout(height=490,margin=dict(l=15,r=15,t=30,b=30))
     st.plotly_chart(fig,use_container_width=True)
@@ -189,7 +172,7 @@ st.caption(f'{company["Sector"]} · Fiscal year end: '+(company['fiscal_end'].st
 c1,c2,c3,c4=st.columns(4)
 c1.metric('Custom Score',f'{company["Custom Score"]:.1f}' if pd.notna(company['Custom Score']) else 'N/A')
 c2.metric('Custom Rank',str(company['Custom Rank']) if pd.notna(company['Custom Rank']) else 'N/A')
-c3.metric('Red Flags',int(company['Red Flags']))
+c3.metric('Overall Score',f'{company["Overall Score"]:.1f}' if pd.notna(company['Overall Score']) else 'N/A')
 c4.metric('Ratio Coverage',f'{company["Coverage %"]:.0f}%')
 st.subheader('Financial ratio profile')
 ratios=pd.DataFrame({'Metric':RATIOS,'Value':[company[m] for m in RATIOS]}).dropna()
@@ -204,6 +187,14 @@ if not parts.empty:
     fig.update_traces(texttemplate='%{text:.0f}% weight',textposition='outside')
     fig.update_layout(height=430,yaxis_range=[0,112],margin=dict(l=15,r=15,t=30,b=30))
     st.plotly_chart(fig,use_container_width=True)
+
+st.divider()
+st.header('Methodology & interpretation')
+st.markdown('''**Financial measures.** STA is the net-income-minus-operating-cash-flow accrual proxy divided by total assets (not a pure short-term accrual decomposition). SNOA is a simplified net operating assets ratio. B/M = book equity / market capitalization. GPA = gross profit / total assets. Accruals is the custom average of STA and SNOA; it is not a standardized accounting ratio.
+
+**Ranking model.** Each metric is converted to a percentile relative to the complete CSV universe. Higher B/M, GPA and Altman Z are preferred; lower STA and SNOA are preferred. The accrual-quality component averages the STA and SNOA percentiles. Your sidebar weights combine the four components into **Custom Score**, normalized across the available nonmissing components. **Custom Rank** changes when you change weights, while the original **Overall Score** and **Rank** are preserved from your CSV.
+
+**Limitations.** These are historical annual figures saved in `universe.csv`, not automatically refreshed market data. The source dataset uses a simplified SNOA calculation and a course-specific Altman Z formula; standard bankruptcy thresholds may not apply. A high screening score is not automatically a BUY recommendation. Some companies have incomplete metrics; use coverage information when comparing rankings.''')
 
 st.divider()
 st.header('Methodology & interpretation')
