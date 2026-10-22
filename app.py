@@ -75,6 +75,12 @@ if weights.sum()==0:
     st.sidebar.warning('All weights are zero. Using equal weights until one is increased.')
     weights=np.array([25.,25.,25.,25.])
 st.sidebar.caption('Effective weights: '+', '.join(f'{name} {w/weights.sum():.0%}' for name,w in zip(CATEGORIES,weights)))
+st.sidebar.markdown('<div class="sidebar-section-heading">BUY / SELL screening</div>', unsafe_allow_html=True)
+st.sidebar.caption('SELL uses accrual quality. BUY uses value and profitability — different financial tests.')
+sell_pct = st.sidebar.slider('SELL: high accrual percentile', 50, 95, 80, 5, help='Flag unusually high STA and/or SNOA values compared with the full company universe.')
+sell_signals = st.sidebar.select_slider('SELL: accrual measures required', options=[1, 2], value=1, help='Require either STA or SNOA to be high, or require both.')
+buy_pct = st.sidebar.slider('BUY: minimum value & profitability percentile', 50, 95, 70, 5, help='A BUY candidate must clear this threshold for BOTH book-to-market and gross profitability.')
+chart_group = st.sidebar.radio('Stocks shown in financial charts', ['All Stocks', 'BUY Candidates', 'SELL Candidates', 'Neutral'], index=0)
 st.sidebar.markdown('<div class="sidebar-section-heading">Narrow your results</div>', unsafe_allow_html=True)
 min_coverage=st.sidebar.slider('Minimum ratio coverage (%)',0,100,0,20)
 min_score=st.sidebar.slider('Minimum custom score',0,100,0,5)
@@ -96,6 +102,22 @@ weight_available=(valid*weights).sum(axis=1)
 data['Custom Score']=np.divide(weighted.sum(axis=1),weight_available,out=np.full(len(data),np.nan),where=weight_available>0)
 data['Custom Rank']=data['Custom Score'].rank(ascending=False,method='min').astype('Int64')
 data['Score Coverage %']=(valid* (weights>0)).sum(axis=1)/max((weights>0).sum(),1)*100
+
+# Distinct investment screens (independent of the customizable overall ranking).
+# SELL: high raw STA / SNOA accrual ratios are adverse; either or both may be required.
+# BUY: BOTH value and gross profitability must be high. This is not the inverse of SELL.
+# Missing metrics never count as passing a test.
+data['_STA_High'] = percentile(data['STA']).ge(sell_pct).fillna(False)
+data['_SNOA_High'] = percentile(data['SNOA']).ge(sell_pct).fillna(False)
+data['_SELL_Signals'] = data[['_STA_High', '_SNOA_High']].sum(axis=1)
+data['_SELL'] = data['_SELL_Signals'].ge(sell_signals)
+data['_BUY_Value'] = data['_Value'].ge(buy_pct).fillna(False)
+data['_BUY_Profit'] = data['_Quality'].ge(buy_pct).fillna(False)
+data['_BUY'] = data['_BUY_Value'] & data['_BUY_Profit'] & ~data['_SELL']
+data['Screening Signal'] = np.select(
+    [data['_SELL'], data['_BUY']], ['SELL Candidate', 'BUY Candidate'], default='Neutral'
+)
+
 st.markdown('<div class="eyebrow">FINANCIAL DISCOVERY · INDUSTRIAL MANUFACTURING</div>',unsafe_allow_html=True)
 st.title('Industrial Manufacturing')
 st.markdown('''<div class="intro">Explore industrial manufacturing stocks through an interactive financial lens. Compare company valuations, profitability, and accruals, then build your own ranking by deciding which factors matter most. <strong>The results change as you experiment</strong>—use the controls on the left to test ideas, discover unusual companies and investigate what drives their scores.</div>''',unsafe_allow_html=True)
@@ -110,9 +132,9 @@ if scope.empty:
 
 m1,m2,m3,m4=st.columns(4)
 m1.metric('Companies on screen',len(scope))
-m2.metric('Companies in CSV',len(data))
-m3.metric('Median custom score',f'{scope["Custom Score"].median():.1f}' if scope['Custom Score'].notna().any() else 'N/A')
-m4.metric('Average ratio coverage',f'{scope["Coverage %"].mean():.0f}%')
+m2.metric('BUY candidates',int((scope['Screening Signal']=='BUY Candidate').sum()))
+m3.metric('SELL candidates',int((scope['Screening Signal']=='SELL Candidate').sum()))
+m4.metric('Neutral companies',int((scope['Screening Signal']=='Neutral').sum()))
 
 st.divider()
 st.header('All company stocks')
@@ -122,7 +144,7 @@ if search.strip():
     scope=scope[scope['Ticker'].str.contains(search.strip(),case=False,regex=False,na=False)|scope['Company'].astype(str).str.contains(search.strip(),case=False,regex=False,na=False)].copy()
 if scope.empty:
     st.info('No matching tickers or companies.');st.stop()
-cols=['Ticker','Company','Sector','fiscal_end','STA','SNOA','B/M','GPA','Altman Z','Accruals','Value Score','Quality Score','Risk Score','Overall Score','Custom Score','Custom Rank','Rank','Coverage %','Score Coverage %']
+cols=['Ticker','Company','Sector','fiscal_end','STA','SNOA','B/M','GPA','Altman Z','Accruals','Screening Signal','Value Score','Quality Score','Risk Score','Overall Score','Custom Score','Custom Rank','Rank','Coverage %','Score Coverage %']
 cols=[c for c in cols if c in scope.columns]
 table=scope[cols].sort_values('Custom Score',ascending=False,na_position='last').copy()
 table['fiscal_end']=table['fiscal_end'].dt.strftime('%Y-%m-%d')
@@ -131,11 +153,18 @@ st.download_button('Download filtered table (CSV)',table.to_csv(index=False).enc
 
 st.divider()
 st.header('Financial chart playground')
-st.caption('All charts use the same filtered companies as the table. Change the chart controls and ranking weights in the sidebar to explore different relationships.')
+st.caption('Charts use the selected sectors, score filters and BUY/SELL category. The all-company table above stays visible.')
+chart_scope = scope.copy()
+if chart_group != 'All Stocks':
+    target = {'BUY Candidates':'BUY Candidate', 'SELL Candidates':'SELL Candidate', 'Neutral':'Neutral'}[chart_group]
+    chart_scope = chart_scope[chart_scope['Screening Signal']==target].copy()
+st.caption(f'Chart view: {chart_group} · {len(chart_scope)} companies')
+if chart_scope.empty:
+    st.info('No stocks match this chart category with the current screening settings. Adjust the BUY/SELL thresholds or choose All Stocks.')
 
 st.subheader(f'Company comparison · {chart_metric}')
 ascending=chart_metric in ['STA','SNOA','Accruals']
-ranked=scope.dropna(subset=[chart_metric]).sort_values(chart_metric,ascending=ascending).head(score_limit)
+ranked=chart_scope.dropna(subset=[chart_metric]).sort_values(chart_metric,ascending=ascending).head(score_limit)
 if not ranked.empty:
     if chart_style=='Horizontal bars':
         fig=px.bar(ranked.sort_values(chart_metric,ascending=not ascending),x=chart_metric,y='Ticker',orientation='h',color=chart_metric,color_continuous_scale='Blues',hover_data=['Company','Sector','Custom Score'])
@@ -146,7 +175,7 @@ if not ranked.empty:
 else:st.info('No valid data for the selected metric.')
 
 st.subheader(f'Explore relationships · {scatter_x} vs {scatter_y}')
-plot=scope.dropna(subset=[scatter_x,scatter_y]).copy()
+plot=chart_scope.dropna(subset=[scatter_x,scatter_y]).copy()
 if not plot.empty:
     fig=px.scatter(plot,x=scatter_x,y=scatter_y,color=color_choice,hover_name='Ticker',hover_data=['Company','Sector','Custom Score'],text='Ticker' if show_labels else None,opacity=.8,size_max=18)
     fig.update_traces(marker=dict(size=12),textposition='top center')
@@ -156,7 +185,7 @@ else:st.info('No companies have both selected financial measures.')
 
 st.subheader('How do manufacturing groups compare?')
 sector_metric=st.selectbox('Financial measure for sector comparison',['Custom Score','B/M','GPA','STA','SNOA','Accruals','Altman Z'],key='sector_metric')
-sector_data=scope.dropna(subset=[sector_metric])
+sector_data=chart_scope.dropna(subset=[sector_metric])
 if not sector_data.empty:
     fig=px.box(sector_data,x='Sector',y=sector_metric,color='Sector',points='all',hover_data=['Ticker','Company'])
     fig.update_layout(height=490,showlegend=False,margin=dict(l=15,r=15,t=30,b=95),xaxis_tickangle=-18)
@@ -169,6 +198,27 @@ selected=st.selectbox('Choose a company',sorted(scope['Ticker'].tolist()))
 company=scope.loc[scope['Ticker']==selected].iloc[0]
 st.subheader(f'{company["Company"]} ({selected})')
 st.caption(f'{company["Sector"]} · Fiscal year end: '+(company['fiscal_end'].strftime('%Y-%m-%d') if pd.notna(company['fiscal_end']) else 'Not available'))
+
+signal = company['Screening Signal']
+if signal == 'SELL Candidate':
+    reasons = []
+    if bool(company['_STA_High']):
+        reasons.append(f"STA = {company['STA']:.4f}, in the high-accrual group (at or above the {sell_pct}th percentile)")
+    if bool(company['_SNOA_High']):
+        reasons.append(f"SNOA = {company['SNOA']:.4f}, in the high-accrual group (at or above the {sell_pct}th percentile)")
+    st.error('**SELL candidate — accrual-based earnings-quality screen.** ' + '; '.join(reasons) + '. Higher accruals can warrant closer investigation, but do not prove overvaluation or a future price decline.')
+elif signal == 'BUY Candidate':
+    st.success(f"**BUY candidate — value and profitability screen.** Book-to-market = {company['B/M']:.4f} ({company['_Value']:.1f}th percentile) and GPA = {company['GPA']:.4f} ({company['_Quality']:.1f}th percentile). Both meet the {buy_pct}th-percentile requirement, and the company does not meet the SELL accrual screen. This is a screening hypothesis, not proof of undervaluation.")
+else:
+    why = []
+    if pd.isna(company['B/M']) or pd.isna(company['GPA']):
+        why.append('book-to-market or gross profitability data is missing')
+    elif not (bool(company['_BUY_Value']) and bool(company['_BUY_Profit'])):
+        why.append(f"B/M and GPA do not both reach the {buy_pct}th-percentile BUY threshold")
+    if not bool(company['_SELL']):
+        why.append(f"fewer than {sell_signals} accrual measures meet the {sell_pct}th-percentile SELL threshold")
+    st.info('**Neutral — neither screening rule is met.** ' + '; '.join(why) + '. Adjust the sidebar thresholds to test different screening decisions.')
+
 c1,c2,c3,c4=st.columns(4)
 c1.metric('Custom Score',f'{company["Custom Score"]:.1f}' if pd.notna(company['Custom Score']) else 'N/A')
 c2.metric('Custom Rank',str(company['Custom Rank']) if pd.notna(company['Custom Rank']) else 'N/A')
@@ -190,18 +240,10 @@ if not parts.empty:
 
 st.divider()
 st.header('Methodology & interpretation')
-st.markdown('''**Financial measures.** STA is the net-income-minus-operating-cash-flow accrual proxy divided by total assets (not a pure short-term accrual decomposition). SNOA is a simplified net operating assets ratio. B/M = book equity / market capitalization. GPA = gross profit / total assets. Accruals is the custom average of STA and SNOA; it is not a standardized accounting ratio.
+st.markdown(f'''**BUY / SELL methodology.** **SELL** is based on unusually high STA and/or SNOA accrual ratios, requiring at least **{sell_signals}** measure(s) at or above the **{sell_pct}th percentile** of the complete CSV universe. **BUY** requires **both** B/M and GPA at or above the **{buy_pct}th percentile**, with no qualifying SELL accrual signal. These are **different** analytical screens: earnings-quality concerns for SELL, value plus gross profitability for BUY. Stocks that qualify for neither are **Neutral**. A company satisfying both screens is classified SELL to avoid contradictory labels. Chart category filters change chart membership, while the full company table remains visible. The customizable ranking weights affect Custom Score and Custom Rank, not the separate BUY/SELL criteria.
+
+**Financial measures.** STA is the net-income-minus-operating-cash-flow accrual proxy divided by total assets (not a pure short-term accrual decomposition). SNOA is a simplified net operating assets ratio. B/M = book equity / market capitalization. GPA = gross profit / total assets. Accruals is the custom average of STA and SNOA; it is not a standardized accounting ratio.
 
 **Ranking model.** Each metric is converted to a percentile relative to the complete CSV universe. Higher B/M, GPA and Altman Z are preferred; lower STA and SNOA are preferred. The accrual-quality component averages the STA and SNOA percentiles. Your sidebar weights combine the four components into **Custom Score**, normalized across the available nonmissing components. **Custom Rank** changes when you change weights, while the original **Overall Score** and **Rank** are preserved from your CSV.
 
 **Limitations.** These are historical annual figures saved in `universe.csv`, not automatically refreshed market data. The source dataset uses a simplified SNOA calculation and a course-specific Altman Z formula; standard bankruptcy thresholds may not apply. A high screening score is not automatically a BUY recommendation. Some companies have incomplete metrics; use coverage information when comparing rankings.''')
-
-st.divider()
-st.header('Methodology & interpretation')
-st.markdown('''**Financial measures.** STA is the net-income-minus-operating-cash-flow accrual proxy divided by total assets (not a pure short-term accrual decomposition). SNOA is a simplified net operating assets ratio. B/M = book equity / market capitalization. GPA = gross profit / total assets. Accruals is the custom average of STA and SNOA; it is not a standardized accounting ratio.
-
-**Ranking model.** Each metric is converted to a percentile relative to the complete CSV universe. Higher B/M, GPA and Altman Z are preferred; lower STA and SNOA are preferred. The accrual-quality component averages the STA and SNOA percentiles. Your sidebar weights combine the four components into **Custom Score**, normalized across the available nonmissing components. **Custom Rank** changes when you change weights, while the original **Overall Score** and **Rank** are preserved from your CSV.
-
-**Warning flags.** High accruals = accrual percentile at or above the selected threshold; low Altman Z = below the selected cutoff; negative GPA = GPA below zero. Missing values do not count as red flags. Changing a warning threshold changes which companies appear when you require flags, and consequently changes all charts.
-
-**Limitations.** These are historical annual figures saved in `universe.csv`, not automatically refreshed market data. The source dataset uses a simplified SNOA calculation and a course-specific Altman Z formula; standard bankruptcy thresholds may not apply. A high screening score is not a BUY recommendation, and a red flag is not automatically a SELL recommendation. Some companies have incomplete metrics; use coverage information when comparing rankings.''')
