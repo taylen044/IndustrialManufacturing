@@ -144,7 +144,7 @@ data['Screening Signal'] = np.select(
 
 st.markdown('<div class="eyebrow">FINANCIAL DISCOVERY · INDUSTRIAL MANUFACTURING</div>',unsafe_allow_html=True)
 st.title('Industrial Manufacturing')
-st.markdown('''<div class="intro">Explore industrial manufacturing stocks through an interactive financial lens. Compare company valuations, profitability, and accruals, then build your own ranking by deciding which factors matter most. <strong>The results change as you experiment</strong>; use the controls on the left to test ideas, discover unusual companies and investigate what drives their scores.</div>''',unsafe_allow_html=True)
+st.markdown('''<div class="intro">Explore industrial manufacturing stocks through an interactive financial lens. Compare company valuations, profitability, and accruals, then build your own ranking by deciding which factors matter most. <strong>The results change as you experiment</strong>, use the controls on the left to test ideas, discover unusual companies and investigate what drives their scores.</div>''',unsafe_allow_html=True)
 st.caption('Educational stock screening based on the historical financial figures in universe.csv. Scores are relative to the saved universe, not forecasts or investment advice.')
 
 if not selected_sectors:
@@ -168,7 +168,7 @@ if search.strip():
     scope=scope[scope['Ticker'].str.contains(search.strip(),case=False,regex=False,na=False)|scope['Company'].astype(str).str.contains(search.strip(),case=False,regex=False,na=False)].copy()
 if scope.empty:
     st.info('No matching tickers or companies.');st.stop()
-cols=['Ticker','Company','Sector','fiscal_end','STA','SNOA','B/M','GPA','Altman Z','Accruals','Screening Signal','Value Score','Quality Score','Risk Score','Overall Score','Custom Score','Custom Rank','Rank','Coverage %','Score Coverage %']
+cols=['Ticker','Company','Sector','fiscal_end','STA','SNOA','B/M','GPA','Altman Z','Accruals','Screening Signal','Value Score','Quality Score','Risk Score','Overall Score','Custom Score','Custom Rank','Rank']
 cols=[c for c in cols if c in scope.columns]
 table=scope[cols].sort_values('Custom Score',ascending=False,na_position='last').copy()
 table['fiscal_end']=table['fiscal_end'].dt.strftime('%Y-%m-%d')
