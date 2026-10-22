@@ -75,7 +75,7 @@ else:
     z_default=float(np.clip(z_valid.quantile(.25),z_lo,z_hi))
 z_cut=st.sidebar.slider('Altman Z cutoff',min_value=z_lo,max_value=z_hi,value=z_default,step=.01,help='A relative screening cutoff, not a validated bankruptcy threshold.')
 red_flags_required=st.sidebar.slider('Red flags required',0,3,0,1)
-st.sidebar.markdown('#### Build your own ranking')
+st.sidebar.markdown('<div class="sidebar-section-heading">Build your own ranking</div>', unsafe_allow_html=True)
 st.sidebar.caption('Adjust the importance of each category. Weights are normalized automatically.')
 w_value=st.sidebar.slider('Value weight',0,100,25,5)
 w_quality=st.sidebar.slider('Profitability weight',0,100,25,5)
@@ -86,11 +86,11 @@ if weights.sum()==0:
     st.sidebar.warning('All weights are zero. Using equal weights until one is increased.')
     weights=np.array([25.,25.,25.,25.])
 st.sidebar.caption('Effective weights: '+', '.join(f'{name} {w/weights.sum():.0%}' for name,w in zip(CATEGORIES,weights)))
-st.sidebar.markdown('#### Narrow your results')
+st.sidebar.markdown('<div class="sidebar-section-heading">Narrow your results</div>', unsafe_allow_html=True)
 min_coverage=st.sidebar.slider('Minimum ratio coverage (%)',0,100,0,20)
 min_score=st.sidebar.slider('Minimum custom score',0,100,0,5)
 score_limit=st.sidebar.slider('Companies in ranking chart',5,50,20,5)
-st.sidebar.markdown('#### Chart playground')
+st.sidebar.markdown('<div class="sidebar-section-heading">Chart playground</div>', unsafe_allow_html=True)
 chart_metric=st.sidebar.selectbox('Ranking chart metric',['Custom Score','B/M','GPA','STA','SNOA','Accruals','Altman Z'])
 chart_style=st.sidebar.radio('Ranking chart style',['Horizontal bars','Vertical bars'],horizontal=False)
 scatter_x=st.sidebar.selectbox('Scatter X axis',RATIOS+['Custom Score'],index=2)
@@ -158,7 +158,7 @@ if not ranked.empty:
         fig=px.bar(ranked.sort_values(chart_metric,ascending=not ascending),x=chart_metric,y='Ticker',orientation='h',color=chart_metric,color_continuous_scale='Blues',hover_data=['Company','Sector','Custom Score'])
     else:
         fig=px.bar(ranked,x='Ticker',y=chart_metric,color=chart_metric,color_continuous_scale='Blues',hover_data=['Company','Sector','Custom Score'])
-    fig.update_layout(height=max(600,min(1000,35*len(ranked))),margin=dict(l=15,r=15,t=30,b=35),coloraxis_showscale=False)
+    fig.update_layout(height=max(420,min(650,25*len(ranked))),margin=dict(l=15,r=15,t=30,b=35),coloraxis_showscale=False)
     st.plotly_chart(fig,use_container_width=True)
 else:st.info('No valid data for the selected metric.')
 
@@ -167,7 +167,7 @@ plot=scope.dropna(subset=[scatter_x,scatter_y]).copy()
 if not plot.empty:
     fig=px.scatter(plot,x=scatter_x,y=scatter_y,color=color_choice,hover_name='Ticker',hover_data=['Company','Sector','Custom Score','Red Flags'],text='Ticker' if show_labels else None,opacity=.8,size_max=18)
     fig.update_traces(marker=dict(size=12),textposition='top center')
-    fig.update_layout(height=690,margin=dict(l=15,r=15,t=30,b=30))
+    fig.update_layout(height=490,margin=dict(l=15,r=15,t=30,b=30))
     st.plotly_chart(fig,use_container_width=True)
 else:st.info('No companies have both selected financial measures.')
 
@@ -176,7 +176,7 @@ sector_metric=st.selectbox('Financial measure for sector comparison',['Custom Sc
 sector_data=scope.dropna(subset=[sector_metric])
 if not sector_data.empty:
     fig=px.box(sector_data,x='Sector',y=sector_metric,color='Sector',points='all',hover_data=['Ticker','Company'])
-    fig.update_layout(height=650,showlegend=False,margin=dict(l=15,r=15,t=30,b=95),xaxis_tickangle=-18)
+    fig.update_layout(height=490,showlegend=False,margin=dict(l=15,r=15,t=30,b=95),xaxis_tickangle=-18)
     st.plotly_chart(fig,use_container_width=True)
 else:st.info('Not enough data for sector comparisons.')
 
@@ -195,14 +195,14 @@ st.subheader('Financial ratio profile')
 ratios=pd.DataFrame({'Metric':RATIOS,'Value':[company[m] for m in RATIOS]}).dropna()
 if not ratios.empty:
     fig=px.bar(ratios,x='Metric',y='Value',color='Metric',text_auto='.3f')
-    fig.update_layout(height=520,showlegend=False,margin=dict(l=15,r=15,t=30,b=30))
+    fig.update_layout(height=410,showlegend=False,margin=dict(l=15,r=15,t=30,b=30))
     st.plotly_chart(fig,use_container_width=True)
 st.subheader('What drives this company’s ranking?')
 parts=pd.DataFrame({'Category':CATEGORIES,'Percentile Score':[company['_Value'],company['_Quality'],company['_Accrual'],company['_Resilience']],'Weight %':weights/weights.sum()*100}).dropna(subset=['Percentile Score'])
 if not parts.empty:
     fig=px.bar(parts,x='Category',y='Percentile Score',color='Weight %',text='Weight %',color_continuous_scale='Blues')
     fig.update_traces(texttemplate='%{text:.0f}% weight',textposition='outside')
-    fig.update_layout(height=560,yaxis_range=[0,112],margin=dict(l=15,r=15,t=30,b=30))
+    fig.update_layout(height=430,yaxis_range=[0,112],margin=dict(l=15,r=15,t=30,b=30))
     st.plotly_chart(fig,use_container_width=True)
 
 st.divider()
