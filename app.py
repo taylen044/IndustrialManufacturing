@@ -77,8 +77,8 @@ if weights.sum()==0:
 st.sidebar.caption('Effective weights: '+', '.join(f'{name} {w/weights.sum():.0%}' for name,w in zip(CATEGORIES,weights)))
 st.sidebar.markdown('<div class="sidebar-section-heading">BUY / SELL screening</div>', unsafe_allow_html=True)
 st.sidebar.caption('Adjust the screening sensitivity to explore potential opportunities and risks.')
-sell_pct = st.sidebar.slider('SELL screening sensitivity', 50, 95, 75, 5, help='Lower thresholds identify more potential SELL candidates. Screening combines multiple financial measures.')
-buy_pct = st.sidebar.slider('BUY screening sensitivity', 50, 95, 75, 5, help='Lower thresholds identify more potential BUY candidates. Screening combines multiple financial measures.')
+sell_pct = st.sidebar.slider('SELL minimum financial weakness', 50, 95, 75, 5, help='Lower thresholds identify more potential SELL candidates. Screening combines multiple financial measures.')
+buy_pct = st.sidebar.slider('BUY minimum financial strength', 50, 95, 75, 5, help='Lower thresholds identify more potential BUY candidates. Screening combines multiple financial measures.')
 chart_group = st.sidebar.radio('Stocks shown in financial charts', ['All Stocks', 'BUY Candidates', 'SELL Candidates', 'Neutral'], index=0)
 st.sidebar.markdown('<div class="sidebar-section-heading">Narrow your results</div>', unsafe_allow_html=True)
 min_coverage=st.sidebar.slider('Minimum ratio coverage (%)',0,100,0,20)
@@ -280,27 +280,27 @@ if not parts.empty:
 
 st.divider()
 st.header('Methodology')
-st.markdown(f'''**How I picked BUY and SELL candidates**
+st.markdown(f'''**How BUY and SELL candidates are selected**
 
-I used five financial ratios to compare the manufacturing companies: STA, SNOA, B/M, GPA, and Altman Z. I looked at them together instead of making a decision based on just one number.
+The app compares manufacturing companies using five financial ratios: STA, SNOA, B/M, GPA, and Altman Z. Using several measures gives a broader picture than relying on just one ratio.
 
-For **SELL candidates**, I focused more on companies with high accruals, since that can be a reason to look more closely at earnings quality. Lower profitability, lower Altman Z, and weaker B/M also affect the result. A stock qualifies when its SELL score reaches **{sell_pct}/100** and at least one of its accrual measures is in the highest 40% for concern.
+**SELL candidates** are screened mainly for high accruals, which can raise questions about earnings quality. Lower profitability, a lower Altman Z value, and weaker B/M also affect the result. A company qualifies when its SELL score reaches **{sell_pct}/100** and at least one accrual measure falls in the highest 40% for concern.
 
-For **BUY candidates**, I focused more on companies with stronger book-to-market values and gross profitability. I also considered their accruals and Altman Z. A stock qualifies when its BUY score reaches **{buy_pct}/100** and both its B/M and GPA are above the 55th percentile. I used different rules for BUY and SELL, so one is not just the opposite of the other. Stocks that qualify for both or neither are shown as **Neutral**. Missing required data can also keep a stock from qualifying.
+**BUY candidates** are screened mainly for stronger book-to-market values and gross profitability. Accruals and Altman Z also contribute. A company qualifies when its BUY score reaches **{buy_pct}/100** and both B/M and GPA rank above the 55th percentile. The BUY and SELL screens use different rules, rather than being exact opposites. Companies meeting both sets of rules, or neither, are marked **Neutral**. Missing financial data may also prevent a company from qualifying.
 
-**What the ratios mean**
+**Financial ratios used**
 
 - **STA:** Net income minus operating cash flow, divided by total assets. This is an overall accrual measure used as a proxy for short-term accruals.
-- **SNOA:** A simplified measure of net operating assets compared with total assets.
-- **B/M:** Book equity divided by market capitalization. I use this to compare stock values.
-- **GPA:** Gross profit divided by total assets. This shows how much gross profit a company generates relative to its assets.
-- **Altman Z:** A measure used to look at financial distress risk.
+- **SNOA:** A simplified measure of net operating assets relative to total assets.
+- **B/M:** Book equity divided by market capitalization. It compares a company's accounting value with its market value.
+- **GPA:** Gross profit divided by total assets. It measures gross profit relative to the company's asset base.
+- **Altman Z:** A measure used to assess financial distress risk.
 - **Accruals:** The average of STA and SNOA in this app. This is a custom measure, not a standard accounting ratio.
 
-**How the rankings work**
+**How company rankings are calculated**
 
-I converted the ratios into percentile scores so companies can be compared on the same scale. Higher B/M, GPA, and Altman Z scores are preferred, while lower STA and SNOA are preferred. The **Custom Score** combines value, profitability, accrual quality, and financial resilience. You can change how much each category counts using the sidebar. The **Custom Rank** changes with those weights, but the original **Overall Score** and **Rank** from the CSV stay the same. The BUY and SELL results are calculated separately from the Custom Score.
+The ratios are converted into percentile scores so that companies can be compared on a common scale. Higher B/M, GPA, and Altman Z values are preferred, while lower STA and SNOA values are preferred. The **Custom Score** combines value, profitability, accrual quality, and financial resilience using the weights selected in the sidebar. Changing the weights updates the **Custom Rank**, while the original **Overall Score** and **Rank** saved in the CSV stay unchanged. BUY and SELL classifications are calculated separately from the Custom Score.
 
-**Things to keep in mind**
+**Limitations**
 
-The app uses annual financial data saved in `universe.csv`, so the numbers are not live. Some companies have missing data. SNOA is simplified, and the Altman Z calculation uses the coefficients from the course, so standard bankruptcy cutoffs might not apply. These results help narrow down stocks to research; they do not guarantee a good investment.''')
+The app uses annual financial data saved in `universe.csv`, not live prices or statements. Some companies have missing data. SNOA is simplified, and the Altman Z formula uses course coefficients, so standard bankruptcy cutoffs may not apply. The results are screening signals for further research, not guaranteed investment outcomes.''')
