@@ -44,7 +44,7 @@ try:
 except Exception as e:
     st.error(str(e)); st.stop()
 if data[['STA','SNOA','B/M','GPA','Altman Z']].notna().sum().sum() == 0:
-    st.error('universe.csv contains only company names/tickers, not financial ratios. Upload the financial-data version of universe.csv.'); st.stop()
+    st.error('universe.csv contains only company names/tickers, not financial ratios. Upload the financial data version of universe.csv.'); st.stop()
 
 def percentile(series, higher=True):
     v = pd.to_numeric(series,errors='coerce').replace([np.inf,-np.inf],np.nan)
@@ -144,7 +144,7 @@ data['Screening Signal'] = np.select(
 
 st.markdown('<div class="eyebrow">FINANCIAL DISCOVERY · INDUSTRIAL MANUFACTURING</div>',unsafe_allow_html=True)
 st.title('Industrial Manufacturing')
-st.markdown('''<div class="intro">Explore industrial manufacturing stocks through an interactive financial lens. Compare company valuations, profitability, and accruals, then build your own ranking by deciding which factors matter most. <strong>The results change as you experiment</strong>—use the controls on the left to test ideas, discover unusual companies and investigate what drives their scores.</div>''',unsafe_allow_html=True)
+st.markdown('''<div class="intro">Explore industrial manufacturing stocks through an interactive financial lens. Compare company valuations, profitability, and accruals, then build your own ranking by deciding which factors matter most. <strong>The results change as you experiment</strong>; use the controls on the left to test ideas, discover unusual companies and investigate what drives their scores.</div>''',unsafe_allow_html=True)
 st.caption('Educational stock screening based on the historical financial figures in universe.csv. Scores are relative to the saved universe, not forecasts or investment advice.')
 
 if not selected_sectors:
@@ -177,7 +177,7 @@ st.download_button('Download filtered table (CSV)',table.to_csv(index=False).enc
 
 st.divider()
 st.header('Financial chart playground')
-st.caption('Charts use the selected sectors, score filters and BUY/SELL category. The all-company table above stays visible.')
+st.caption('Charts use the selected sectors, score filters and BUY/SELL category. The full company table above stays visible.')
 chart_scope = scope.copy()
 if chart_group != 'All Stocks':
     target = {'BUY Candidates':'BUY Candidate', 'SELL Candidates':'SELL Candidate', 'Neutral':'Neutral'}[chart_group]
@@ -286,16 +286,21 @@ The app compares manufacturing companies using five financial ratios: STA, SNOA,
 
 **SELL candidates** are screened mainly for high accruals, which can raise questions about earnings quality. Lower profitability, a lower Altman Z value, and weaker B/M also affect the result. A company qualifies when its SELL score reaches **{sell_pct}/100** and at least one accrual measure falls in the highest 40% for concern.
 
-**BUY candidates** are screened mainly for stronger book-to-market values and gross profitability. Accruals and Altman Z also contribute. A company qualifies when its BUY score reaches **{buy_pct}/100** and both B/M and GPA rank above the 55th percentile. The BUY and SELL screens use different rules, rather than being exact opposites. Companies meeting both sets of rules, or neither, are marked **Neutral**. Missing financial data may also prevent a company from qualifying.
+**BUY candidates** are screened mainly for stronger book to market values and gross profitability. Accruals and Altman Z also contribute. A company qualifies when its BUY score reaches **{buy_pct}/100** and both B/M and GPA rank above the 55th percentile. The BUY and SELL screens use different rules, rather than being exact opposites. Companies meeting both sets of rules, or neither, are marked **Neutral**. Missing financial data may also prevent a company from qualifying.
 
 **Financial ratios used**
 
-- **STA:** Net income minus operating cash flow, divided by total assets. This is an overall accrual measure used as a proxy for short-term accruals.
-- **SNOA:** A simplified measure of net operating assets relative to total assets.
-- **B/M:** Book equity divided by market capitalization. It compares a company's accounting value with its market value.
-- **GPA:** Gross profit divided by total assets. It measures gross profit relative to the company's asset base.
-- **Altman Z:** A measure used to assess financial distress risk.
-- **Accruals:** The average of STA and SNOA in this app. This is a custom measure, not a standard accounting ratio.
+**STA:** Net income minus operating cash flow, divided by total assets. This is an overall accrual measure used as a proxy for short term accruals.
+
+**SNOA:** A simplified measure of net operating assets relative to total assets.
+
+**B/M:** Book equity divided by market capitalization. It compares a company's accounting value with its market value.
+
+**GPA:** Gross profit divided by total assets. It measures gross profit relative to the company's asset base.
+
+**Altman Z:** A measure used to assess financial distress risk.
+
+**Accruals:** The average of STA and SNOA in this app. This is a custom measure, not a standard accounting ratio.
 
 **How company rankings are calculated**
 
