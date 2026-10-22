@@ -4,13 +4,13 @@ import numpy as np
 import plotly.express as px
 from pathlib import Path
 
-st.set_page_config(page_title='Industrial Equity Lab | Stock Screener', page_icon='🏭', layout='wide', initial_sidebar_state='expanded')
+st.set_page_config(page_title='Industrial Manufacturing | Stock Screener', page_icon='🏭', layout='wide', initial_sidebar_state='expanded')
 st.markdown('''<style>
 .stApp{background:#f5f3ef;color:#17243b}h1,h2,h3{color:#17243b!important}
 section[data-testid="stSidebar"]{background:#19243b}section[data-testid="stSidebar"] h1,section[data-testid="stSidebar"] h2,section[data-testid="stSidebar"] h3,section[data-testid="stSidebar"] label,section[data-testid="stSidebar"] p{color:#f5f7fc!important}
 section[data-testid="stSidebar"] [data-baseweb="select"] *{color:#18243e!important}
 div[data-testid="stMetric"]{background:white;border:1px solid #e1ddd7;border-radius:12px;padding:12px 16px}
-div[data-testid="stDataFrame"]{background:white;border-radius:12px}.eyebrow{font-size:13px;font-weight:800;letter-spacing:2px;color:#ad512d}.intro{font-size:17px;line-height:1.7;max-width:1100px;color:#34435b}</style>''', unsafe_allow_html=True)
+div[data-testid="stDataFrame"]{background:white;border-radius:12px}.eyebrow{font-size:13px;font-weight:800;letter-spacing:2px;color:#ad512d}.intro{font-size:17px;line-height:1.7;max-width:1100px;color:#34435b}.sidebar-section-heading{color:#ffffff!important;font-size:1.15rem;font-weight:750;line-height:1.5;margin:1.3rem 0 .45rem;padding:.5rem .75rem;background:#344666;border-left:4px solid #f5a65b;border-radius:6px}</style>''', unsafe_allow_html=True)
 
 RATIOS = ['STA','SNOA','B/M','GPA','Altman Z','Accruals']
 CATEGORIES = ['Value','Quality','Accrual Quality','Financial Resilience']
@@ -64,7 +64,7 @@ st.sidebar.title('Explore & filter')
 st.sidebar.caption('Every change updates the table and financial charts.')
 sectors = sorted(data['Sector'].dropna().unique().tolist())
 selected_sectors = st.sidebar.multiselect('Sectors to include',sectors,default=sectors)
-st.sidebar.markdown('#### Financial warning signs')
+st.sidebar.markdown('<div class="sidebar-section-heading">Financial warning signs</div>', unsafe_allow_html=True)
 accrual_cut = st.sidebar.slider('Accrual percentile flag',50,100,80,5,help='High accruals at or above this percentile are flagged.')
 z_valid = data['Altman Z'].dropna()
 if z_valid.empty:
@@ -114,8 +114,8 @@ data['Negative GPA Flag']=(data['GPA']<0)&data['GPA'].notna()
 data['Red Flags']=data[['High Accrual Flag','Low Altman Z Flag','Negative GPA Flag']].sum(axis=1).astype(int)
 
 st.markdown('<div class="eyebrow">FINANCIAL DISCOVERY · INDUSTRIAL MANUFACTURING</div>',unsafe_allow_html=True)
-st.title('Industrial Equity Lab')
-st.markdown('''<div class="intro">Explore manufacturing stocks through an interactive financial lens. Compare company valuations, profitability, accruals and financial resilience, then build your own ranking by deciding which factors matter most. <strong>The results change as you experiment</strong>—use the controls on the left to test ideas, discover unusual companies and investigate what drives their scores.</div>''',unsafe_allow_html=True)
+st.title('Industrial Manufacturing')
+st.markdown('''<div class="intro">Explore industrial manufacturing stocks through an interactive financial lens. Compare company valuations, profitability, and accruals, then build your own ranking by deciding which factors matter most. <strong>The results change as you experiment</strong>—use the controls on the left to test ideas, discover unusual companies and investigate what drives their scores.</div>''',unsafe_allow_html=True)
 st.caption('Educational stock screening based on the historical financial figures in universe.csv. Scores are relative to the saved universe, not forecasts or investment advice.')
 
 if not selected_sectors:
