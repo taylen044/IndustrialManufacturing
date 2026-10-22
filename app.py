@@ -76,10 +76,9 @@ if weights.sum()==0:
     weights=np.array([25.,25.,25.,25.])
 st.sidebar.caption('Effective weights: '+', '.join(f'{name} {w/weights.sum():.0%}' for name,w in zip(CATEGORIES,weights)))
 st.sidebar.markdown('<div class="sidebar-section-heading">BUY / SELL screening</div>', unsafe_allow_html=True)
-st.sidebar.caption('SELL uses accrual quality. BUY uses value and profitability — different financial tests.')
-sell_pct = st.sidebar.slider('SELL: high accrual percentile', 50, 95, 80, 5, help='Flag unusually high STA and/or SNOA values compared with the full company universe.')
-sell_signals = st.sidebar.select_slider('SELL: accrual measures required', options=[1, 2], value=1, help='Require either STA or SNOA to be high, or require both.')
-buy_pct = st.sidebar.slider('BUY: minimum value & profitability percentile', 50, 95, 70, 5, help='A BUY candidate must clear this threshold for BOTH book-to-market and gross profitability.')
+st.sidebar.caption('Adjust the screening sensitivity to explore potential opportunities and risks.')
+sell_pct = st.sidebar.slider('SELL screening sensitivity', 50, 95, 75, 5, help='Lower thresholds identify more potential SELL candidates. Screening combines multiple financial measures.')
+buy_pct = st.sidebar.slider('BUY screening sensitivity', 50, 95, 75, 5, help='Lower thresholds identify more potential BUY candidates. Screening combines multiple financial measures.')
 chart_group = st.sidebar.radio('Stocks shown in financial charts', ['All Stocks', 'BUY Candidates', 'SELL Candidates', 'Neutral'], index=0)
 st.sidebar.markdown('<div class="sidebar-section-heading">Narrow your results</div>', unsafe_allow_html=True)
 min_coverage=st.sidebar.slider('Minimum ratio coverage (%)',0,100,0,20)
@@ -103,19 +102,44 @@ data['Custom Score']=np.divide(weighted.sum(axis=1),weight_available,out=np.full
 data['Custom Rank']=data['Custom Score'].rank(ascending=False,method='min').astype('Int64')
 data['Score Coverage %']=(valid* (weights>0)).sum(axis=1)/max((weights>0).sum(),1)*100
 
-# Distinct investment screens (independent of the customizable overall ranking).
-# SELL: high raw STA / SNOA accrual ratios are adverse; either or both may be required.
-# BUY: BOTH value and gross profitability must be high. This is not the inverse of SELL.
-# Missing metrics never count as passing a test.
-data['_STA_High'] = percentile(data['STA']).ge(sell_pct).fillna(False)
-data['_SNOA_High'] = percentile(data['SNOA']).ge(sell_pct).fillna(False)
-data['_SELL_Signals'] = data[['_STA_High', '_SNOA_High']].sum(axis=1)
-data['_SELL'] = data['_SELL_Signals'].ge(sell_signals)
-data['_BUY_Value'] = data['_Value'].ge(buy_pct).fillna(False)
-data['_BUY_Profit'] = data['_Quality'].ge(buy_pct).fillna(False)
-data['_BUY'] = data['_BUY_Value'] & data['_BUY_Profit'] & ~data['_SELL']
+# Both screens consider all five underlying financial ratios, but use
+# distinct analytical emphases rather than simply reversing one score.
+# SELL emphasizes accrual risk and financial weakness; BUY emphasizes
+# value and profitability supported by financial strength and earnings quality.
+# A component's missing value is not silently treated as a passing signal.
+def weighted_screen(components):
+    frame = pd.DataFrame(components, index=data.index)
+    return frame.mean(axis=1, skipna=False)
+
+# High scores indicate stronger evidence for the specified screen.
+data['_SellStrength'] = weighted_screen({
+    'STA concern': percentile(data['STA']),
+    'SNOA concern': percentile(data['SNOA']),
+    'Low profitability': percentile(data['GPA'], False),
+    'Low resilience': percentile(data['Altman Z'], False),
+    'Low value': percentile(data['B/M'], False),
+})
+data['_BuyStrength'] = weighted_screen({
+    'Attractive value': data['_Value'],
+    'High profitability': data['_Quality'],
+    'Financial resilience': data['_Resilience'],
+    'Cash earnings quality': data['_Accrual'],
+})
+
+# The SELL screen uses all five raw ratios; the BUY screen uses B/M,
+# GPA, Altman Z and both accrual components. Different weights make the
+# screens independent investment theses, not simple opposites.
+# Require above-median core evidence in addition to composite strength.
+data['_SELL'] = (data['_SellStrength'] >= sell_pct) & (
+    (percentile(data['STA']) >= 60) | (percentile(data['SNOA']) >= 60)
+)
+data['_BUY'] = (data['_BuyStrength'] >= buy_pct) & (
+    (data['_Value'] >= 55) & (data['_Quality'] >= 55)
+)
+# Avoid conflicting recommendations; mixed evidence is Neutral.
 data['Screening Signal'] = np.select(
-    [data['_SELL'], data['_BUY']], ['SELL Candidate', 'BUY Candidate'], default='Neutral'
+    [data['_SELL'] & ~data['_BUY'], data['_BUY'] & ~data['_SELL']],
+    ['SELL Candidate', 'BUY Candidate'], default='Neutral'
 )
 
 st.markdown('<div class="eyebrow">FINANCIAL DISCOVERY · INDUSTRIAL MANUFACTURING</div>',unsafe_allow_html=True)
@@ -200,24 +224,40 @@ st.subheader(f'{company["Company"]} ({selected})')
 st.caption(f'{company["Sector"]} · Fiscal year end: '+(company['fiscal_end'].strftime('%Y-%m-%d') if pd.notna(company['fiscal_end']) else 'Not available'))
 
 signal = company['Screening Signal']
+
+def metric_summary(row):
+    fields = [('STA', 'STA'), ('SNOA', 'SNOA'), ('B/M', 'B/M'),
+              ('GPA', 'GPA'), ('Altman Z', 'Altman Z')]
+    return ', '.join(f'{label}: {row[key]:.4f}' if pd.notna(row[key])
+                     else f'{label}: unavailable' for label, key in fields)
+
 if signal == 'SELL Candidate':
-    reasons = []
-    if bool(company['_STA_High']):
-        reasons.append(f"STA = {company['STA']:.4f}, in the high-accrual group (at or above the {sell_pct}th percentile)")
-    if bool(company['_SNOA_High']):
-        reasons.append(f"SNOA = {company['SNOA']:.4f}, in the high-accrual group (at or above the {sell_pct}th percentile)")
-    st.error('**SELL candidate — accrual-based earnings-quality screen.** ' + '; '.join(reasons) + '. Higher accruals can warrant closer investigation, but do not prove overvaluation or a future price decline.')
+    st.error(
+        f"**SELL candidate.** This stock has a combined financial concern score of "
+        f"{company['_SellStrength']:.1f}/100, meeting the selected SELL threshold of {sell_pct}. "
+        "The screen evaluates accrual intensity, profitability, financial resilience, and valuation. "
+        f"Company values: {metric_summary(company)}. "
+        "These factors suggest further investigation of earnings quality and potential downside, "
+        "not proof that the stock is overvalued."
+    )
 elif signal == 'BUY Candidate':
-    st.success(f"**BUY candidate — value and profitability screen.** Book-to-market = {company['B/M']:.4f} ({company['_Value']:.1f}th percentile) and GPA = {company['GPA']:.4f} ({company['_Quality']:.1f}th percentile). Both meet the {buy_pct}th-percentile requirement, and the company does not meet the SELL accrual screen. This is a screening hypothesis, not proof of undervaluation.")
+    st.success(
+        f"**BUY candidate.** This stock has a combined financial opportunity score of "
+        f"{company['_BuyStrength']:.1f}/100, meeting the selected BUY threshold of {buy_pct}. "
+        "The screen rewards valuation and profitability, with additional support from "
+        "earnings quality and financial resilience. "
+        f"Company values: {metric_summary(company)}. "
+        "These factors support a potential investment thesis, not a guarantee of future returns."
+    )
 else:
-    why = []
-    if pd.isna(company['B/M']) or pd.isna(company['GPA']):
-        why.append('book-to-market or gross profitability data is missing')
-    elif not (bool(company['_BUY_Value']) and bool(company['_BUY_Profit'])):
-        why.append(f"B/M and GPA do not both reach the {buy_pct}th-percentile BUY threshold")
-    if not bool(company['_SELL']):
-        why.append(f"fewer than {sell_signals} accrual measures meet the {sell_pct}th-percentile SELL threshold")
-    st.info('**Neutral — neither screening rule is met.** ' + '; '.join(why) + '. Adjust the sidebar thresholds to test different screening decisions.')
+    sell_text = (f"{company['_SellStrength']:.1f}" if pd.notna(company['_SellStrength']) else 'unavailable')
+    buy_text = (f"{company['_BuyStrength']:.1f}" if pd.notna(company['_BuyStrength']) else 'unavailable')
+    st.info(
+        f"**Neutral.** BUY screen: {buy_text}/100 (threshold {buy_pct}); "
+        f"SELL screen: {sell_text}/100 (threshold {sell_pct}). "
+        "The stock does not uniquely satisfy either complete screening rule, or some financial "
+        f"data is unavailable. Company values: {metric_summary(company)}."
+    )
 
 c1,c2,c3,c4=st.columns(4)
 c1.metric('Custom Score',f'{company["Custom Score"]:.1f}' if pd.notna(company['Custom Score']) else 'N/A')
@@ -240,10 +280,10 @@ if not parts.empty:
 
 st.divider()
 st.header('Methodology & interpretation')
-st.markdown(f'''**BUY / SELL methodology.** **SELL** is based on unusually high STA and/or SNOA accrual ratios, requiring at least **{sell_signals}** measure(s) at or above the **{sell_pct}th percentile** of the complete CSV universe. **BUY** requires **both** B/M and GPA at or above the **{buy_pct}th percentile**, with no qualifying SELL accrual signal. These are **different** analytical screens: earnings-quality concerns for SELL, value plus gross profitability for BUY. Stocks that qualify for neither are **Neutral**. A company satisfying both screens is classified SELL to avoid contradictory labels. Chart category filters change chart membership, while the full company table remains visible. The customizable ranking weights affect Custom Score and Custom Rank, not the separate BUY/SELL criteria.
+st.markdown(f'''**BUY and SELL methodology.** The SELL analysis evaluates all five ratios, emphasizing high accruals (STA and SNOA), low gross profitability (GPA), low Altman Z and weak book-to-market value (B/M). The BUY analysis emphasizes strong B/M and GPA, supported by Altman Z and lower STA/SNOA. Each component is percentile ranked against the complete CSV universe. SELL and BUY use different combinations and qualifying rules, rather than simply reversing the same recommendation. A company is a **SELL candidate** when its SELL composite reaches **{sell_pct}/100** and at least one accrual measure is in the top 40% for concern. A company is a **BUY candidate** when its BUY composite reaches **{buy_pct}/100** and both B/M and GPA are above the 55th percentile. If both screens qualify or neither does, the result is **Neutral**. Companies missing a required metric do not pass either screen. Sidebar sensitivity sliders update the classifications, chart selections, and company explanations.
 
-**Financial measures.** STA is the net-income-minus-operating-cash-flow accrual proxy divided by total assets (not a pure short-term accrual decomposition). SNOA is a simplified net operating assets ratio. B/M = book equity / market capitalization. GPA = gross profit / total assets. Accruals is the custom average of STA and SNOA; it is not a standardized accounting ratio.
+**Financial measures.** STA = (net income minus operating cash flow) / total assets, an overall accrual proxy rather than a pure short-term accrual decomposition. SNOA is a simplified net operating assets ratio. B/M = book equity / market capitalization. GPA = gross profit / total assets. Accruals is the custom average of STA and SNOA, not a standardized accounting ratio.
 
-**Ranking model.** Each metric is converted to a percentile relative to the complete CSV universe. Higher B/M, GPA and Altman Z are preferred; lower STA and SNOA are preferred. The accrual-quality component averages the STA and SNOA percentiles. Your sidebar weights combine the four components into **Custom Score**, normalized across the available nonmissing components. **Custom Rank** changes when you change weights, while the original **Overall Score** and **Rank** are preserved from your CSV.
+**Ranking model.** Higher B/M, GPA and Altman Z are preferred; lower STA and SNOA are preferred. The accrual quality component averages the STA and SNOA percentiles. The sidebar weights combine four components into **Custom Score**, normalized across available nonmissing components. **Custom Rank** responds to weights, while original **Overall Score** and **Rank** remain from the CSV. The customizable rank and BUY/SELL classification are separate analyses.
 
-**Limitations.** These are historical annual figures saved in `universe.csv`, not automatically refreshed market data. The source dataset uses a simplified SNOA calculation and a course-specific Altman Z formula; standard bankruptcy thresholds may not apply. A high screening score is not automatically a BUY recommendation. Some companies have incomplete metrics; use coverage information when comparing rankings.''')
+**Limitations.** These are historical annual figures saved in `universe.csv`, not live market data. The source uses a simplified SNOA calculation and course-specific Altman Z coefficients; standard bankruptcy thresholds may not apply. Screening is not a price target or investment advice. Some companies have incomplete metrics; compare coverage before drawing conclusions.''')
