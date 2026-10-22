@@ -279,11 +279,28 @@ if not parts.empty:
     st.plotly_chart(fig,use_container_width=True)
 
 st.divider()
-st.header('Methodology & interpretation')
-st.markdown(f'''**BUY and SELL methodology.** The SELL analysis evaluates all five ratios, emphasizing high accruals (STA and SNOA), low gross profitability (GPA), low Altman Z and weak book-to-market value (B/M). The BUY analysis emphasizes strong B/M and GPA, supported by Altman Z and lower STA/SNOA. Each component is percentile ranked against the complete CSV universe. SELL and BUY use different combinations and qualifying rules, rather than simply reversing the same recommendation. A company is a **SELL candidate** when its SELL composite reaches **{sell_pct}/100** and at least one accrual measure is in the top 40% for concern. A company is a **BUY candidate** when its BUY composite reaches **{buy_pct}/100** and both B/M and GPA are above the 55th percentile. If both screens qualify or neither does, the result is **Neutral**. Companies missing a required metric do not pass either screen. Sidebar sensitivity sliders update the classifications, chart selections, and company explanations.
+st.header('Methodology')
+st.markdown(f'''**How I picked BUY and SELL candidates**
 
-**Financial measures.** STA = (net income minus operating cash flow) / total assets, an overall accrual proxy rather than a pure short-term accrual decomposition. SNOA is a simplified net operating assets ratio. B/M = book equity / market capitalization. GPA = gross profit / total assets. Accruals is the custom average of STA and SNOA, not a standardized accounting ratio.
+I used five financial ratios to compare the manufacturing companies: STA, SNOA, B/M, GPA, and Altman Z. I looked at them together instead of making a decision based on just one number.
 
-**Ranking model.** Higher B/M, GPA and Altman Z are preferred; lower STA and SNOA are preferred. The accrual quality component averages the STA and SNOA percentiles. The sidebar weights combine four components into **Custom Score**, normalized across available nonmissing components. **Custom Rank** responds to weights, while original **Overall Score** and **Rank** remain from the CSV. The customizable rank and BUY/SELL classification are separate analyses.
+For **SELL candidates**, I focused more on companies with high accruals, since that can be a reason to look more closely at earnings quality. Lower profitability, lower Altman Z, and weaker B/M also affect the result. A stock qualifies when its SELL score reaches **{sell_pct}/100** and at least one of its accrual measures is in the highest 40% for concern.
 
-**Limitations.** These are historical annual figures saved in `universe.csv`, not live market data. The source uses a simplified SNOA calculation and course-specific Altman Z coefficients; standard bankruptcy thresholds may not apply. Screening is not a price target or investment advice. Some companies have incomplete metrics; compare coverage before drawing conclusions.''')
+For **BUY candidates**, I focused more on companies with stronger book-to-market values and gross profitability. I also considered their accruals and Altman Z. A stock qualifies when its BUY score reaches **{buy_pct}/100** and both its B/M and GPA are above the 55th percentile. I used different rules for BUY and SELL, so one is not just the opposite of the other. Stocks that qualify for both or neither are shown as **Neutral**. Missing required data can also keep a stock from qualifying.
+
+**What the ratios mean**
+
+- **STA:** Net income minus operating cash flow, divided by total assets. This is an overall accrual measure used as a proxy for short-term accruals.
+- **SNOA:** A simplified measure of net operating assets compared with total assets.
+- **B/M:** Book equity divided by market capitalization. I use this to compare stock values.
+- **GPA:** Gross profit divided by total assets. This shows how much gross profit a company generates relative to its assets.
+- **Altman Z:** A measure used to look at financial distress risk.
+- **Accruals:** The average of STA and SNOA in this app. This is a custom measure, not a standard accounting ratio.
+
+**How the rankings work**
+
+I converted the ratios into percentile scores so companies can be compared on the same scale. Higher B/M, GPA, and Altman Z scores are preferred, while lower STA and SNOA are preferred. The **Custom Score** combines value, profitability, accrual quality, and financial resilience. You can change how much each category counts using the sidebar. The **Custom Rank** changes with those weights, but the original **Overall Score** and **Rank** from the CSV stay the same. The BUY and SELL results are calculated separately from the Custom Score.
+
+**Things to keep in mind**
+
+The app uses annual financial data saved in `universe.csv`, so the numbers are not live. Some companies have missing data. SNOA is simplified, and the Altman Z calculation uses the coefficients from the course, so standard bankruptcy cutoffs might not apply. These results help narrow down stocks to research; they do not guarantee a good investment.''')
