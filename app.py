@@ -92,8 +92,12 @@ st.sidebar.divider()
 st.sidebar.caption('Data source: universe.csv (saved snapshot, not a live feed).')
 
 st.markdown('<div class="eyebrow">FINANCIAL ANALYSIS · INDUSTRIAL MANUFACTURING</div>', unsafe_allow_html=True)
-st.title('Manufacturing Stock Screener')
-st.markdown('<p class="subtle">All-company rankings first, financial charts next, and methodology at the bottom.</p>', unsafe_allow_html=True)
+st.title('Welcome to ManuValue!')
+st.markdown('''ManuValue is an interactive stock screening tool that helps users explore industrial manufacturing companies and compare their financial strength. It analyzes **accruals (STA and SNOA)**, **book-to-market value**, **gross profitability**, and **Altman Z** to organize companies into financial rankings.
+
+**How to use ManuValue:** Start with the sidebar to select manufacturing sectors, set a minimum financial-data coverage level, and adjust the minimum overall score. Explore the **all-company rankings table**, then scroll down to interact with full-width financial charts and investigate individual stocks. The methodology at the bottom explains how the financial ratios and scores were calculated.
+''')
+st.caption('Source: universe.csv · Saved financial statement snapshot, not live market data')
 
 if not selected_sectors:
     st.info('Select at least one sector in the sidebar.')
@@ -136,30 +140,35 @@ st.download_button('Download filtered company rankings (CSV)',
 # SECOND: financial charts only (no BUY or SELL candidate charts/tables).
 st.divider()
 st.subheader('Financial charts')
-chart_left, chart_right = st.columns(2, gap='medium')
-with chart_left:
-    st.markdown('**Highest overall scores**')
-    ranked = scope.dropna(subset=['Overall Score']).nlargest(top_n, 'Overall Score')
-    if not ranked.empty:
-        fig = px.bar(ranked.sort_values('Overall Score'), x='Overall Score', y='Ticker',
-                     orientation='h', hover_data=['Company', 'Sector'],
-                     color='Overall Score', color_continuous_scale='Blues')
-        fig.update_layout(height=max(380, 26 * len(ranked)), coloraxis_showscale=False,
-                          margin=dict(l=5, r=5, t=10, b=5))
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info('No overall scores available for this selection.')
-with chart_right:
-    st.markdown('**Book-to-market vs. gross profitability**')
-    scatter = scope.dropna(subset=['B/M', 'GPA'])
-    if not scatter.empty:
-        fig = px.scatter(scatter, x='B/M', y='GPA', color='Sector',
-                         hover_name='Ticker', hover_data=['Company'])
-        fig.update_layout(height=430, margin=dict(l=5, r=5, t=10, b=5))
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info('Not enough B/M and GPA data for this chart.')
+st.markdown('### Overall stock rankings')
+ranked = scope.dropna(subset=['Overall Score']).nlargest(top_n, 'Overall Score')
+if not ranked.empty:
+    fig = px.bar(ranked.sort_values('Overall Score'), x='Overall Score', y='Ticker',
+                 orientation='h', hover_data=['Company', 'Sector'],
+                 color='Overall Score', color_continuous_scale='Blues')
+    fig.update_layout(height=max(520, 33 * len(ranked)), coloraxis_showscale=False,
+                      margin=dict(l=20, r=20, t=25, b=25),
+                      xaxis_title='Overall score (0–100)', yaxis_title='Company ticker')
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info('No overall scores available for this selection.')
 
+st.markdown('### Book-to-market vs. gross profitability')
+st.caption('Hover over each point to identify the company. Use the legend to explore individual sectors.')
+scatter = scope.dropna(subset=['B/M', 'GPA'])
+if not scatter.empty:
+    fig = px.scatter(scatter, x='B/M', y='GPA', color='Sector',
+                     hover_name='Ticker', hover_data=['Company'],
+                     custom_data=['Overall Score'])
+    fig.update_traces(marker=dict(size=11, opacity=0.82))
+    fig.update_layout(height=610, margin=dict(l=20, r=20, t=25, b=25),
+                      legend_title_text='Manufacturing sector')
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info('Not enough B/M and GPA data for this chart.')
+
+st.divider()
+st.subheader('Individual company analysis')
 st.markdown('**Explore one company**')
 selected_ticker = st.selectbox('Select a ticker', sorted(scope['Ticker'].tolist()))
 company = scope.loc[scope['Ticker'] == selected_ticker].iloc[0]
@@ -169,29 +178,31 @@ metrics = st.columns(5)
 for panel, name in zip(metrics, ['STA', 'SNOA', 'B/M', 'GPA', 'Altman Z']):
     value = company[name]
     panel.metric(name, f'{value:.3f}' if pd.notna(value) else 'N/A')
-left, right = st.columns(2, gap='medium')
-with left:
-    st.markdown('**Company category scores**')
-    names = ['Value Score', 'Quality Score', 'Risk Score']
-    vals = pd.to_numeric(company[names], errors='coerce').dropna()
-    if not vals.empty:
-        fig = px.bar(x=vals.index.tolist(), y=vals.values,
-                     labels={'x': 'Category', 'y': 'Score / 100'})
-        fig.update_layout(height=340, margin=dict(l=5, r=5, t=10, b=5))
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info('No category scores available.')
-with right:
-    st.markdown('**Company accrual ratios**')
-    names = ['STA', 'SNOA', 'Accruals']
-    vals = pd.to_numeric(company[names], errors='coerce').dropna()
-    if not vals.empty:
-        fig = px.bar(x=vals.index.tolist(), y=vals.values,
-                     labels={'x': 'Ratio', 'y': 'Value'})
-        fig.update_layout(height=340, margin=dict(l=5, r=5, t=10, b=5))
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info('No accrual ratios available.')
+st.markdown('### Company category scores')
+names = ['Value Score', 'Quality Score', 'Risk Score']
+vals = pd.to_numeric(company[names], errors='coerce').dropna()
+if not vals.empty:
+    fig = px.bar(x=vals.index.tolist(), y=vals.values,
+                 labels={'x': 'Category', 'y': 'Score / 100'},
+                 color=vals.index.tolist(), color_discrete_sequence=px.colors.qualitative.Set2)
+    fig.update_layout(height=490, margin=dict(l=20, r=20, t=25, b=25),
+                      showlegend=False, yaxis_range=[0, 105])
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info('No category scores available.')
+
+st.markdown('### Company accrual ratios')
+names = ['STA', 'SNOA', 'Accruals']
+vals = pd.to_numeric(company[names], errors='coerce').dropna()
+if not vals.empty:
+    fig = px.bar(x=vals.index.tolist(), y=vals.values,
+                 labels={'x': 'Ratio', 'y': 'Value'},
+                 color=vals.index.tolist(), color_discrete_sequence=px.colors.qualitative.Set2)
+    fig.update_layout(height=490, margin=dict(l=20, r=20, t=25, b=25),
+                      showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info('No accrual ratios available.')
 
 # THIRD: methodology last.
 st.divider()
